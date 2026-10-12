@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<requirements-checklist task="Training Sessions Workspace" source="frontend-accelerator-onboarding/TASK.md" role="requirements-analyst">
+  <goals>
+    <item>A trainer can see their training sessions in one place.</item>
+    <item>A trainer can narrow the list by session status.</item>
+    <item>A trainer can add a new session with a title and a future start date/time, and see it in the list.</item>
+    <item>Scope stays small. Nothing outside view, filter and create is added.</item>
+  </goals>
+
+  <functional-requirements>
+    <group name="Viewing sessions">
+      <item>Sessions load automatically when the trainer opens the workspace.</item>
+      <item>Each session shows its title, status and start date/time.</item>
+      <item>A loading indication is shown while sessions are loading.</item>
+      <item>If loading fails, one understandable error state is shown.</item>
+      <item>The trainer can retry from that error state.</item>
+      <item>If there are no sessions to show, a short "no sessions" message is displayed.</item>
+    </group>
+    <group name="Filtering sessions">
+      <item>The trainer can choose `All` or exactly one status.</item>
+      <item>`All` shows every session.</item>
+      <item>A chosen status shows only sessions with that status.</item>
+    </group>
+    <group name="Creating a session">
+      <item>The trainer can open a create form with a title and a start date/time.</item>
+      <item>The title is trimmed and must be 3 to 80 characters long.</item>
+      <item>The date/time must be in the future.</item>
+      <item>Invalid input produces a useful message that explains what to fix.</item>
+      <item>While a create request is pending, repeated submission is prevented.</item>
+      <item>A successfully created session gets a default initial status.</item>
+      <item>A successfully created session is added to the visible list. If a status filter is active, it appears only when it matches that filter.</item>
+      <item>After success, the form closes and resets.</item>
+      <item>If creation fails, a message is shown, the entered values are kept, and the trainer can resubmit.</item>
+    </group>
+  </functional-requirements>
+
+  <acceptance-criteria>
+    <item>Opening the workspace shows loaded sessions with title, status and start date/time.</item>
+    <item>A loading indication is visible while the request is pending.</item>
+    <item>A failed load shows an error state that the trainer can recover from.</item>
+    <item>An empty result shows a "no sessions" message.</item>
+    <item>Picking a status shows only matching sessions, and picking `All` shows every session again.</item>
+    <item>A title that is empty, whitespace-only, shorter than 3 characters or longer than 80 characters is rejected with a message.</item>
+    <item>A title of exactly 3 or exactly 80 characters is accepted, regardless of surrounding spaces.</item>
+    <item>A missing or non-future date/time is rejected with a message.</item>
+    <item>Submitting a valid form creates exactly one session, even with repeated submit attempts while pending.</item>
+    <item>After a successful create, the session is visible under `All`, and the form is closed and reset.</item>
+    <item>After a failed create, the trainer sees a message and the entered values are preserved.</item>
+    <item>The trainer can complete the whole flow: open, filter, create, then see the new session.</item>
+    <item>At least one automated test covers the main flow, for example filtering or successful creation, by checking what the trainer sees.</item>
+    <item>The flow has been tried once in a real browser, and what was actually seen is recorded.</item>
+    <item>Anything not done or not checked is reported as such.</item>
+  </acceptance-criteria>
+
+  <out-of-scope>
+    <item>Session details, drawers or deep links</item>
+    <item>Search or multiple filters</item>
+    <item>Pagination</item>
+    <item>A complete API contract or scenario matrix</item>
+    <item>Desktop/mobile screenshot sets</item>
+    <item>Exhaustive responsive and accessibility validation</item>
+    <item>Full test coverage</item>
+    <item>CI, deployment or a public URL</item>
+    <item>Strict TypeScript migration or unrelated refactoring</item>
+    <item>Production-grade concerns beyond the above. This is a training exercise, so session ordering and additional session fields are not required.</item>
+  </out-of-scope>
+
+  <assumptions>
+    <item>The status values in the filter are not specified. Any reasonable choice is acceptable.</item>
+    <item>The default status for a new session is not specified. Any reasonable choice from those status values is acceptable.</item>
+    <item>The date format and timezone for "future date/time" are not specified. Any reasonable choice is acceptable.</item>
+    <item>The wording of error and validation messages is not specified. Any reasonable choice is acceptable.</item>
+    <item>Session order in the list is not specified. Any order is acceptable.</item>
+    <item>A session consists of title, status and start date/time only.</item>
+    <item>Only the trainer's flow is covered, with no other users, sign-in or permissions.</item>
+    <item>Data comes from a mock API, and no real backend is built.</item>
+    <item>The mock approach, existing stack and unrelated-code constraints in TASK.md are delivery conditions for later roles, not business requirements.</item>
+  </assumptions>
+</requirements-checklist>

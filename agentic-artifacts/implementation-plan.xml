@@ -1,0 +1,285 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<implementation-plan task="Training Sessions Workspace" source="agentic-artifacts/requirements-checklist.xml" role="writing-plans">
+
+  <verified-project-facts>
+    <item>Application root is mikhnevich-accelerator-task/. Stack read from package.json: React ^19.2.8, react-dom ^19.2.8, Vite ^8.3.0, @vitejs/plugin-react ^6.1.1, TypeScript ~6.0.2, oxlint ^1.81.0. Package manager: npm (package-lock.json present).</item>
+    <item>Scripts that exist: dev (vite), build (tsc -b &amp;&amp; vite build), lint (oxlint), preview. There is NO test script and NO test dependency (vitest, jsdom, testing-library, msw are absent from package.json and node_modules).</item>
+    <item>No mock mechanism exists in the repository (no msw, no mock folder, no HTTP client).</item>
+    <item>src/ contains only App.tsx (renders a placeholder div), main.tsx (StrictMode + createRoot, imports ./index.css and ./App.tsx) and index.css (empty file). So there are no existing design conventions to follow.</item>
+    <item>tsconfig.app.json (include: src) sets verbatimModuleSyntax, erasableSyntaxOnly (no enums, no constructor parameter properties), noUnusedLocals/Parameters, allowImportingTsExtensions, jsx react-jsx, types vite/client. Existing imports use the .tsx extension (import App from './App.tsx'). strict is not enabled and must not be migrated.</item>
+    <item>.oxlintrc.json enables react/rules-of-hooks (error) and react/only-export-components (warn, allowConstantExport). Component files must therefore export components only.</item>
+    <item>tsconfig.node.json includes only vite.config.ts. A new vitest.config.ts would not be type-checked by tsc -b unless that include is changed; the plan leaves it unchecked (see risks).</item>
+  </verified-project-facts>
+
+  <folder-structure>
+    <file path="package.json" status="modified">Add a "test" script (vitest run) and test devDependencies. Nothing else changes.</file>
+    <file path="package-lock.json" status="modified">Updated by npm install only.</file>
+    <file path="vitest.config.ts" status="new">Test runner config: merges the existing vite.config.ts via mergeConfig, sets environment jsdom and setupFiles. Keeps vite.config.ts untouched.</file>
+    <file path="src/test-setup.ts" status="new">Imports @testing-library/jest-dom/vitest and registers RTL cleanup after each test.</file>
+    <file path="src/index.css" status="modified">Currently empty. Neutral global and component styles (plain CSS, CSS custom properties, no animations).</file>
+    <file path="src/App.tsx" status="modified">Replace placeholder. Renders SessionsWorkspace with the default mock API instance.</file>
+    <file path="src/features/sessions/index.ts" status="new">Feature barrel: exports SessionsWorkspace and the default mockSessionsApi instance for App.tsx.</file>
+    <file path="src/features/sessions/model/types.ts" status="new">Session, SessionStatus, NewSessionInput, SessionsApi interface.</file>
+    <file path="src/features/sessions/model/constants.ts" status="new">Status list, status labels, default status, title limits, all user-facing message strings.</file>
+    <file path="src/features/sessions/lib/validation.ts" status="new">Pure function validateSessionForm(values, now) returning field errors.</file>
+    <file path="src/features/sessions/lib/format.ts" status="new">Pure helpers: formatStartsAt(iso) for display and localInputToIso(value) for the form value.</file>
+    <file path="src/features/sessions/api/mockSessionsApi.ts" status="new">In-memory mock behind SessionsApi: createMockSessionsApi(options) factory plus the default instance used by App. Simulated latency and failure. The ?mock= URL switches (list-error fails every list call, list-error-once fails only the first, create-error, empty) are a manual-check aid read once at import time (window.location.search), not on navigation; importing the feature barrel therefore reads the URL.</file>
+    <file path="src/features/sessions/hooks/useSessions.ts" status="new">Hook: owns sessions list, load status, reload, and createSession (appends on success).</file>
+    <file path="src/features/sessions/components/SessionsWorkspace.tsx" status="new">Container: owns active filter and form-open flag, derives the visible list, composes the parts.</file>
+    <file path="src/features/sessions/components/SessionFilter.tsx" status="new">Presentational status select with All.</file>
+    <file path="src/features/sessions/components/SessionList.tsx" status="new">Presentational list of sessions or the empty message.</file>
+    <file path="src/features/sessions/components/CreateSessionForm.tsx" status="new">Form with local values, errors, submit error and pending flag.</file>
+    <file path="src/features/sessions/components/SessionsWorkspace.test.tsx" status="new">Behavior tests of the main flow through the rendered workspace with a fake API.</file>
+    <file path="src/features/sessions/lib/validation.test.ts" status="new">Small boundary tests for the pure validation function.</file>
+    <untouched>vite.config.ts, tsconfig*.json, .oxlintrc.json, index.html, src/main.tsx, toolchain/, rulesets/, .claude/, dist/.</untouched>
+  </folder-structure>
+
+  <dependencies>
+    <runtime>None. The existing React 19 stack is sufficient: useState, useEffect, useRef, useId, native form elements. No router, state library, form library, date library or HTTP library.</runtime>
+    <mock>No MSW. TASK.md accepts "an HTTP client or equivalent replaceable request boundary". The boundary is the SessionsApi interface in types.ts; the mock is one in-memory implementation of it. This avoids a service worker file and a new dependency.</mock>
+    <dev-dependencies note="No test stack exists in the repo, so one is required for the mandatory automated test. Versions are resolved by npm at install time (latest compatible with Vite 8); exact versions are unverified.">
+      <dependency name="vitest">Test runner. Reuses the existing Vite config and transform, so no Babel/Jest setup is needed.</dependency>
+      <dependency name="jsdom">DOM environment for rendering React in Vitest.</dependency>
+      <dependency name="@testing-library/react">Render and query by what the trainer sees (roles, labels, text).</dependency>
+      <dependency name="@testing-library/user-event">Realistic typing, clicking and selecting.</dependency>
+      <dependency name="@testing-library/jest-dom">Readable DOM assertions (toBeInTheDocument, toBeDisabled) via its vitest entry point.</dependency>
+    </dev-dependencies>
+  </dependencies>
+
+  <architecture>
+    <layers>
+      <layer name="shared types and constants">types.ts, constants.ts, format.ts, validation.ts. Pure, no React, no imports from other layers (validation and format import constants/types only).</layer>
+      <layer name="data access (mock API)">mockSessionsApi.ts. Implements SessionsApi from types.ts. Knows nothing about React or UI.</layer>
+      <layer name="state and logic">useSessions.ts. Receives a SessionsApi by argument, never imports the mock directly. Owns list data and load status.</layer>
+      <layer name="UI components">SessionsWorkspace (container), SessionFilter, SessionList, CreateSessionForm. Presentational parts receive data and callbacks via props.</layer>
+      <layer name="composition root">App.tsx imports the default mock instance and passes it to SessionsWorkspace as the api prop. This is the only place the mock is chosen. Tests pass a fake api instead.</layer>
+    </layers>
+    <dependency-direction>
+      App -&gt; SessionsWorkspace -&gt; (useSessions, SessionFilter, SessionList, CreateSessionForm)
+      useSessions -&gt; types
+      CreateSessionForm -&gt; validation, format, constants, types
+      SessionList -&gt; format, constants, types
+      mockSessionsApi -&gt; types, constants
+      validation, format -&gt; constants, types
+      Rule: arrows never point back up. UI never imports mockSessionsApi (only App does). mockSessionsApi never imports React.
+    </dependency-direction>
+    <communication>
+      Workspace calls useSessions(api) and receives { status, sessions, reload, createSession }. Workspace passes the filtered list to SessionList and createSession plus onCreated/onCancel to CreateSessionForm. The form calls createSession(input), awaits it, and on success calls onCreated; the workspace then closes (unmounts) the form.
+    </communication>
+    <conventions>
+      Use import type for types (verbatimModuleSyntax). Use string-literal unions with an as const array, not enums (erasableSyntaxOnly). Relative imports, .tsx/.ts extensions for local files to match main.tsx. Component files export only components (oxlint only-export-components); constants live in constants.ts. No TypeScript strict migration.
+    </conventions>
+  </architecture>
+
+  <state-management>
+    <state name="sessions list" location="useSessions (useState Session[])" why="Server-like data; shared by list and create. Updated only by successful load and successful create (new session prepended with a functional update)."/>
+    <state name="load status" location="useSessions (useState 'loading' | 'error' | 'success'), initial 'loading'" why="Drives loading, error and success views. 'Empty' is not stored: it is derived as success with zero visible sessions."/>
+    <state name="reload trigger" location="useSessions (attempt counter)" why="Retry sets status to loading and increments the counter; the load effect depends on [api, attempt]. The effect uses a cancelled flag in cleanup so StrictMode's double effect run and stale responses are ignored."/>
+    <state name="active status filter" location="SessionsWorkspace (useState 'all' | SessionStatus, initial 'all')" why="UI-only choice, used only by the container to derive the list."/>
+    <state name="form open" location="SessionsWorkspace (useState boolean)" why="Container shows or hides the form. Unmounting the form on close/success resets its local state automatically."/>
+    <state name="form values" location="CreateSessionForm (useState { title, startsAt })" why="Local to the form; startsAt holds the datetime-local string. Kept on create failure because the form stays mounted."/>
+    <state name="form errors" location="CreateSessionForm (useState { title?, startsAt? })" why="Computed on submit by validateSessionForm; a field's error is cleared when that field is edited."/>
+    <state name="submit error" location="CreateSessionForm (useState string | null)" why="Create-failure message; cleared on the next submit attempt."/>
+    <state name="pending-create flag" location="CreateSessionForm (useState boolean for rendering + useRef boolean as synchronous guard)" why="State updates are async, so two submit events in the same tick could both pass a state check. The ref is checked and set synchronously at the top of the submit handler; the state disables the submit and cancel buttons and changes the label to 'Creating...'. The ref is reset in finally."/>
+    <derived name="filtered list">const visible = filter === 'all' ? sessions : sessions.filter(s =&gt; s.status === filter), computed in SessionsWorkspace during render. No effect, no extra state, no useMemo (small list). Because it derives from the full list, a new session appears under an active filter only if its status matches, and always under All.</derived>
+    <blocking-repeated-submit>handleSubmit: if (submittingRef.current) return; validate; if errors, show them and return; submittingRef.current = true; setPending(true); try { await createSession(...); onCreated() } catch { setSubmitError(msg) } finally { submittingRef.current = false; if still mounted setPending(false) }. After success the form is unmounted, so setPending must be guarded (use a mounted ref or skip the reset on success path). Exactly one api.createSession call per valid submission.</blocking-repeated-submit>
+    <toolbar-visibility>Filter and the New session button are rendered only when load status is success (including the empty case). This prevents creating during loading, which would be overwritten by the load result, and creating while the list is in error.</toolbar-visibility>
+  </state-management>
+
+  <data-contracts>
+    <session-shape>
+      type SessionStatus = 'scheduled' | 'completed' | 'cancelled'
+      interface Session { id: string; title: string; status: SessionStatus; startsAt: string }
+      id is an opaque technical key for React (not displayed, not a product field). startsAt is an ISO 8601 UTC string, e.g. 2026-11-02T09:30:00.000Z. No other fields.
+    </session-shape>
+    <statuses>
+      SESSION_STATUSES = ['scheduled', 'completed', 'cancelled'] with labels Scheduled, Completed, Cancelled. Filter options: All, Scheduled, Completed, Cancelled. DEFAULT_STATUS = 'scheduled' (a newly created future session is naturally scheduled).
+    </statuses>
+    <api-surface>
+      interface NewSessionInput { title: string; startsAt: string }  // title already trimmed, startsAt ISO UTC
+      interface SessionsApi { listSessions(): Promise&lt;Session[]&gt;; createSession(input: NewSessionInput): Promise&lt;Session&gt; }
+      The status of a new session is assigned by the API (DEFAULT_STATUS), as a real backend would.
+    </api-surface>
+    <mock-behavior>
+      createMockSessionsApi(options: { latencyMs?: number; seed?: Session[]; failFirstList?: boolean; failFirstCreate?: boolean }). In-memory array store, closure state, no globals. listSessions resolves a copy of the store after latency (default 600 ms). createSession resolves after latency (default 800 ms): assigns id (counter, e.g. session-6), status DEFAULT_STATUS, prepends to the store, returns the new Session. Failure: when failFirstList is true the first listSessions call rejects with Error('Failed to load sessions'), later calls succeed (so Retry demonstrably recovers). failFirstCreate behaves the same for the first createSession call, which does not modify the store. Seed: 5 sessions covering all three statuses, with startsAt computed relative to module load time (completed in the past, scheduled in the future); titles are plausible training topics.
+      Default instance: mockSessionsApi = createMockSessionsApi(optionsFromUrl()). optionsFromUrl reads window.location.search once (guarded by typeof window) param mock: 'list-error' -&gt; failFirstList, 'create-error' -&gt; failFirstCreate, 'empty' -&gt; seed []. These params exist only to let the manual browser check reach the error and empty states; they are not part of the product UI.
+    </mock-behavior>
+    <date-time-decision>
+      The form uses a native input type="datetime-local" (value format YYYY-MM-DDTHH:mm, no timezone). The value is interpreted in the browser's local timezone: new Date(value). Stored and exchanged as ISO UTC via toISOString(). "Future" means new Date(value).getTime() strictly greater than Date.now() at submit time (injected as now in validation for testability). Display uses Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }) in the browser's local timezone and locale; the &lt;time&gt; element carries dateTime={startsAt}. A value that does not parse (empty string) counts as missing.
+    </date-time-decision>
+  </data-contracts>
+
+  <ui-ux-decisions>
+    <layout>
+      One centered column (max-width about 720px, 16px+ padding). Hierarchy: main &gt; h1 "Training sessions" &gt; toolbar (SessionFilter + "New session" button) &gt; CreateSessionForm (when open, directly under the toolbar, inline, no modal) &gt; content area (loading | error | SessionList or empty message).
+    </layout>
+    <states>
+      <state name="loading">role="status" text "Loading sessions..." in the content area. Toolbar hidden.</state>
+      <state name="error">role="alert" block: "Could not load sessions." plus "Check your connection and try again." and a "Try again" button that calls reload. One error state only. Toolbar hidden.</state>
+      <state name="empty">Short text "No sessions to show." in the content area, used both for an empty load and for a filter with no matches. Toolbar stays visible so the trainer can create or change the filter.</state>
+      <state name="list">ul of li. Each item: title (strong), status label (small text badge with a plain border, no color coding), start date/time in a time element. Order: as returned/prepended; no sorting.</state>
+    </states>
+    <filter>Native select with a visible label "Status" and options All, Scheduled, Completed, Cancelled; default All. Native control chosen for built-in keyboard and screen-reader support.</filter>
+    <create-form>
+      Entry point: "New session" button in the toolbar; it is disabled/hidden while the form is open. Form heading "New session". Fields: text input labelled "Title" (maxLength not set, so the 80-character rule is reported by validation rather than silently truncated) and datetime-local input labelled "Start date and time". Buttons: "Create session" (submit) and "Cancel". Form has noValidate so only the app's own messages show. Each field's error is rendered in a p directly under the field, linked with aria-describedby and aria-invalid on the input; the first invalid field receives focus after a failed submit. Create-failure message is rendered in a role="alert" paragraph above the buttons. While pending: both buttons disabled, submit label "Creating...". Cancel closes and discards values. Success closes the form and resets it (unmount).
+    </create-form>
+    <visual-constraints>
+      No animations or transitions. Neutral palette via CSS custom properties on :root: page background #f6f7f9, surface #ffffff, text #1f2933, muted text #52606d, border #cbd2d9, primary button background #3e4c59 with white text, error text #a61b1b. System font stack, 16px base, line-height 1.5, spacing in multiples of 8px, visible focus outline (do not remove). Plain CSS in src/index.css with simple class names; no CSS framework.
+    </visual-constraints>
+    <note>A newly created session hidden by an active non-matching filter is simply not shown (per requirements). No extra notice is added, to avoid scope growth; see risks.</note>
+  </ui-ux-decisions>
+
+  <validation-rules>
+    <rule field="title">Value is trimmed (String.prototype.trim) before checks. After trim, length 0 -&gt; "Enter a title." Length 1 to 2 -&gt; "Title must be at least 3 characters." Length greater than 80 -&gt; "Title must be at most 80 characters." Lengths 3 and 80 are valid. Surrounding spaces never count. The trimmed value is what is sent to the API. Length is JS string length (UTF-16 units).</rule>
+    <rule field="startsAt">Empty or unparseable -&gt; "Choose a start date and time." Parsed time less than or equal to now -&gt; "Start date and time must be in the future." Strictly later than now is valid.</rule>
+    <rule field="create failure">API rejection -&gt; "Could not create the session. Your entries are kept, please try again." Shown in the form; values preserved; submit re-enabled.</rule>
+    <rule field="load failure">"Could not load sessions." with the hint "Check your connection and try again." and button "Try again".</rule>
+    <timing>Validation runs on submit; both fields are validated together so both messages can show at once. A field's error is cleared when that field changes. No API call is made when validation fails. All message strings live in constants.ts (single place to reword).</timing>
+    <signature>validateSessionForm(values: { title: string; startsAt: string }, now: Date = new Date()): { title?: string; startsAt?: string }. Empty object means valid.</signature>
+  </validation-rules>
+
+  <implementation-steps>
+    <step n="1" title="Test tooling">
+      <files>package.json, package-lock.json, vitest.config.ts (new), src/test-setup.ts (new)</files>
+      <do>npm install -D vitest jsdom @testing-library/react @testing-library/user-event @testing-library/jest-dom. Add script "test": "vitest run". Create vitest.config.ts: mergeConfig(viteConfig, defineConfig({ test: { environment: 'jsdom', setupFiles: ['./src/test-setup.ts'] } })) importing defineConfig and mergeConfig from 'vitest/config' and viteConfig from './vite.config.ts'. test-setup.ts: import '@testing-library/jest-dom/vitest'; import { afterEach } from 'vitest'; import { cleanup } from '@testing-library/react'; afterEach(cleanup). Do not use vitest globals (tests import from 'vitest' explicitly so tsc -b type-checks them).</do>
+      <satisfies>AC13 (prerequisite)</satisfies>
+    </step>
+    <step n="2" title="Types and constants">
+      <files>src/features/sessions/types.ts, src/features/sessions/constants.ts</files>
+      <do>Define SessionStatus, Session, NewSessionInput, SessionsApi per data-contracts. In constants.ts export SESSION_STATUSES (as const), STATUS_LABELS, DEFAULT_STATUS, TITLE_MIN = 3, TITLE_MAX = 80 and every message string from validation-rules and the UI states (loading, load error, empty, create failure).</do>
+      <satisfies>G4, FV2, FC6 (status default)</satisfies>
+    </step>
+    <step n="3" title="Validation and formatting helpers">
+      <files>src/features/sessions/validation.ts, src/features/sessions/format.ts</files>
+      <do>Implement validateSessionForm exactly as in validation-rules. format.ts: formatStartsAt(iso) via Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }); localInputToIso(value) returning new Date(value).toISOString().</do>
+      <satisfies>FC3, FC4, FC5, AC6, AC7, AC8, FV2</satisfies>
+    </step>
+    <step n="4" title="Mock API">
+      <files>src/features/sessions/mockSessionsApi.ts</files>
+      <do>Implement createMockSessionsApi and the default mockSessionsApi instance with URL param options as specified in data-contracts. Export only the factory and the default instance (no React).</do>
+      <satisfies>FV1, FV4, FC7, FC9, assumption "mock API"</satisfies>
+    </step>
+    <step n="5" title="State/logic hook">
+      <files>src/features/sessions/useSessions.ts</files>
+      <do>useSessions(api): useState status 'loading', sessions []; effect on [api, attempt] with cancelled flag calls api.listSessions(), sets sessions and status 'success' or status 'error' (no console noise required). reload(): setStatus('loading'); setAttempt(a =&gt; a + 1). createSession(input): const created = await api.createSession(input); setSessions(prev =&gt; [created, ...prev]); return created. createSession lets rejections propagate to the caller. Return { status, sessions, reload, createSession }.</do>
+      <satisfies>FV1, FV3, FV4, FV5, FC7, AC1, AC2, AC3</satisfies>
+    </step>
+    <step n="6" title="Presentational list and filter">
+      <files>src/features/sessions/SessionList.tsx, src/features/sessions/SessionFilter.tsx</files>
+      <do>SessionList({ sessions }): if empty render the empty message paragraph; else ul with li showing title, STATUS_LABELS[status] and a time element (dateTime=startsAt, text formatStartsAt(startsAt)); key=id. SessionFilter({ value, onChange }): label "Status" + select with All + one option per SESSION_STATUSES (labels from STATUS_LABELS); onChange passes the typed value.</do>
+      <satisfies>FV2, FV6, FF1, FF2, FF3, AC1, AC4, AC5</satisfies>
+    </step>
+    <step n="7" title="Create form">
+      <files>src/features/sessions/CreateSessionForm.tsx</files>
+      <do>Props: { createSession(input): Promise&lt;unknown&gt;; onCreated(): void; onCancel(): void }. Local state: values, errors, submitError, pending; refs: submittingRef, mountedRef (or skip pending reset on success). Use useId for label/error ids. Submit handler per blocking-repeated-submit: preventDefault, ref guard, validateSessionForm, on errors set errors and focus first invalid input via refs; otherwise call createSession({ title: values.title.trim(), startsAt: localInputToIso(values.startsAt) }); success -&gt; onCreated(); failure -&gt; setSubmitError(CREATE_FAILED message), values untouched. Editing a field clears that field's error. Cancel disabled while pending.</do>
+      <satisfies>FC1, FC2, FC3, FC4, FC5, FC8, FC9, AC6-AC11</satisfies>
+    </step>
+    <step n="8" title="Container and composition root">
+      <files>src/features/sessions/SessionsWorkspace.tsx, src/App.tsx</files>
+      <do>SessionsWorkspace({ api }): const { status, sessions, reload, createSession } = useSessions(api); filter and formOpen state; compute visible; render h1; branch on status: 'loading' -&gt; loading message; 'error' -&gt; error block with Try again; 'success' -&gt; toolbar (SessionFilter, New session button), form when formOpen (onCreated and onCancel set formOpen false), SessionList(visible). Use explicit ternaries/early returns for conditional rendering, not bare &amp;&amp; with non-booleans. App.tsx: import { mockSessionsApi } and render &lt;SessionsWorkspace api={mockSessionsApi} /&gt;. main.tsx is not changed.</do>
+      <satisfies>G1, G2, G3, FV1-FV6, FF1-FF3, FC1, FC7, FC8, AC12</satisfies>
+    </step>
+    <step n="9" title="Styles">
+      <files>src/index.css</files>
+      <do>Add the neutral styles described in ui-ux-decisions: tokens on :root, body background and font, .workspace column, toolbar flex row with gap, form fields stacked with labels above inputs, error text color, list items separated by a border, buttons, visible focus ring. No animation, transition or gradient properties.</do>
+      <satisfies>UI constraints (neutral look, readable spacing, visible validation messages)</satisfies>
+    </step>
+    <step n="10" title="Automated tests">
+      <files>src/features/sessions/SessionsWorkspace.test.tsx, src/features/sessions/validation.test.ts</files>
+      <do>As specified in testing-and-verification.</do>
+      <satisfies>AC13, AC6, AC7, AC9, AC10</satisfies>
+    </step>
+    <step n="11" title="Local checks (run by the coder role, results reported as is)">
+      <files>none</files>
+      <do>npm run lint, npm run build (includes tsc -b over src including tests), npm test. Fix only failures caused by the new code. Report exact commands and outcomes.</do>
+      <satisfies>AC15 (honest reporting)</satisfies>
+    </step>
+    <step n="12" title="Manual browser check">
+      <files>none (result recorded in the workflow log by the developer)</files>
+      <do>Procedure in testing-and-verification.</do>
+      <satisfies>AC12, AC14, AC15</satisfies>
+    </step>
+
+    <traceability>
+      <note>IDs: G1-G4 = goals in order. FV1-FV6 = Viewing sessions in order. FF1-FF3 = Filtering in order. FC1-FC9 = Creating in order. AC1-AC15 = acceptance criteria in order.</note>
+      <row item="G1 see sessions in one place" steps="5, 6, 8"/>
+      <row item="G2 narrow by status" steps="6, 8"/>
+      <row item="G3 add a session and see it" steps="5, 7, 8"/>
+      <row item="G4 scope stays small" steps="all; dependencies limited to test tooling, no extra features"/>
+      <row item="FV1 load automatically" steps="4, 5, 8"/>
+      <row item="FV2 title, status, start date/time shown" steps="2, 3, 6"/>
+      <row item="FV3 loading indication" steps="5, 8"/>
+      <row item="FV4 one understandable error state" steps="4, 5, 8"/>
+      <row item="FV5 retry from error" steps="5, 8"/>
+      <row item="FV6 'no sessions' message" steps="6, 8"/>
+      <row item="FF1 choose All or exactly one status" steps="6, 8"/>
+      <row item="FF2 All shows every session" steps="6, 8"/>
+      <row item="FF3 status shows only matching" steps="6, 8"/>
+      <row item="FC1 open create form with title and date/time" steps="7, 8"/>
+      <row item="FC2 title trimmed, 3-80" steps="3, 7"/>
+      <row item="FC3 date/time in the future" steps="3, 7"/>
+      <row item="FC4 useful invalid-input message" steps="2, 3, 7"/>
+      <row item="FC5 repeated submit prevented while pending" steps="7"/>
+      <row item="FC6 default initial status" steps="2, 4"/>
+      <row item="FC7 created session added to list, respects filter" steps="5, 8"/>
+      <row item="FC8 form closes and resets after success" steps="7, 8"/>
+      <row item="FC9 create failure: message, values kept, resubmit" steps="4, 7"/>
+      <row item="AC1 loaded sessions with title, status, date/time" steps="5, 6, 10"/>
+      <row item="AC2 loading visible while pending" steps="5, 8"/>
+      <row item="AC3 failed load recoverable" steps="4, 5, 8"/>
+      <row item="AC4 empty result shows message" steps="6, 8"/>
+      <row item="AC5 status pick filters; All restores" steps="6, 8, 10"/>
+      <row item="AC6 empty/whitespace/short/long title rejected" steps="3, 7, 10"/>
+      <row item="AC7 exactly 3 or 80 chars accepted, spaces ignored" steps="3, 10"/>
+      <row item="AC8 missing or non-future date rejected" steps="3, 7"/>
+      <row item="AC9 exactly one session on repeated submit" steps="7, 10"/>
+      <row item="AC10 visible under All; form closed and reset" steps="7, 8, 10"/>
+      <row item="AC11 failed create: message, values preserved" steps="7, 10"/>
+      <row item="AC12 whole flow completable" steps="8, 12"/>
+      <row item="AC13 at least one automated behavior test" steps="1, 10, 11"/>
+      <row item="AC14 real-browser run recorded" steps="12"/>
+      <row item="AC15 not done / not checked reported" steps="11, 12"/>
+    </traceability>
+  </implementation-steps>
+
+  <testing-and-verification>
+    <tooling>Vitest (jsdom) + @testing-library/react + @testing-library/user-event + @testing-library/jest-dom. Run with npm test (vitest run). Tests live next to the feature in src/features/sessions/. Tests render SessionsWorkspace with a hand-written fake SessionsApi (not the mock with latency), so they need no timers; pending states are controlled with deferred promises. Queries use roles, labels and text only; no snapshots, no assertions on internal state.</tooling>
+    <tests>
+      <test file="SessionsWorkspace.test.tsx" required="true" name="filters sessions by status">Fake list returns sessions with all three statuses. Assert loading text first, then titles and status labels visible. Select "Completed" in the "Status" select: only completed titles remain. Select "All": every title is back.</test>
+      <test file="SessionsWorkspace.test.tsx" required="true" name="creates a session and shows it">Open "New session", type a valid title (with surrounding spaces) and set a far-future date via fireEvent.change on the datetime-local input (user-event typing into it is unreliable in jsdom). Fake createSession returns a deferred promise. Submit twice (click plus fireEvent.submit on the form in the same tick): assert createSession called once with the trimmed title and an ISO startsAt, and "Creating..." is shown with the button disabled. Resolve: new title appears in the list, the form is gone, reopening the form shows empty fields.</test>
+      <test file="SessionsWorkspace.test.tsx" required="false" name="keeps values after create failure">createSession rejects: the failure message is visible, typed title and date are still in the inputs, and a second submit (now resolving) succeeds.</test>
+      <test file="SessionsWorkspace.test.tsx" required="false" name="load error can be retried">First listSessions rejects: "Could not load sessions." visible; click "Try again": sessions render.</test>
+      <test file="validation.test.ts" required="false" name="title and date boundaries">Titles of 3 and 80 chars (also padded with spaces) valid; "", "   ", 2 chars, 81 chars invalid with the exact messages; empty, past and equal-to-now date invalid; now plus one minute valid, using an injected now.</test>
+    </tests>
+    <checks>npm run lint, npm run build, npm test. Results reported verbatim, including failures.</checks>
+    <manual-browser-check>
+      <procedure>
+        1. npm run dev; open the URL Vite prints in a real browser. Record URL, browser name and version, date.
+        2. Load: observe "Loading sessions..." then the list; confirm each row shows title, status, date/time.
+        3. Filter: pick each status, then All; record which titles were visible each time.
+        4. Create validation: open New session and submit empty; then title "ab"; then 81 characters; then valid title with no date; then a past date. Record each message and its position.
+        5. Boundaries: titles of exactly 3 and exactly 80 characters (with surrounding spaces) are accepted.
+        6. Create success: valid title and future date; double-click Create; record "Creating..." state, that exactly one new row appeared, form closed, and reopening shows an empty form. Repeat with a non-matching filter active and record that the row is hidden until All is chosen.
+        7. Error and empty states: open /?mock=list-error (error persists on every retry; use /?mock=list-error-once to see Try again recover), /?mock=create-error (first create fails, entered values kept, resubmit succeeds), /?mock=empty ("No sessions to show.").
+        8. Check the browser console for errors.
+      </procedure>
+      <record>For every step: what was actually seen (quote messages), pass or fail, anything unexpected, console errors. Written to frontend-accelerator-onboarding/workflow-log.md by the developer (not by this plan).</record>
+    </manual-browser-check>
+    <reported-as-not-done-or-not-checked>
+      Anything not run is reported as such. Expected by design: no screenshots, no multi-browser or mobile/responsive check, no accessibility audit beyond labels/roles used in tests, no coverage measurement, no real backend or network behavior, no CI or deployment, vitest.config.ts not type-checked by tsc -b, exact installed dependency versions not pinned by this plan. Timezone behavior is checked only in the developer's local timezone.
+    </reported-as-not-done-or-not-checked>
+  </testing-and-verification>
+
+  <risks-and-open-questions>
+    <item>No existing mock mechanism: assumed an in-memory implementation behind the SessionsApi interface is an acceptable "equivalent replaceable request boundary". Alternative if a true HTTP-level mock is required: MSW (adds a dependency and a service worker file). No requirement is changed either way.</item>
+    <item>No existing test stack: Vitest + Testing Library added as the smallest fit for Vite. Exact versions and compatibility with Vite 8 and TypeScript 6 are unverified until npm install; if incompatible, the coder reports it rather than switching tools silently.</item>
+    <item>URL parameters ?mock=... are a manual-verification aid, not a product feature. If undesired, the alternative is temporarily editing mock options during the manual check.</item>
+    <item>Filter and New session are hidden during loading and error to avoid a create-versus-load race. The requirements do not forbid showing them earlier; assumption chosen for correctness and simplicity.</item>
+    <item>A created session is prepended to the list; the checklist allows any order. Mock seed dates are relative to page load, so seeded "scheduled" items always look upcoming.</item>
+    <item>Title length uses JS string length; emoji or other astral characters count as two. Acceptable for a training exercise.</item>
+    <item>When a status filter is active and the created session does not match, nothing indicates it was created. This follows the requirement literally; a notice would be added scope and is not planned.</item>
+    <item>vitest.config.ts is outside tsconfig.node.json include, so it is not type-checked by tsc -b. Adding it would modify an existing config, which the constraints discourage; left as is.</item>
+    <item>The datetime-local control renders differently across browsers; behavior beyond the one manual browser is unchecked.</item>
+    <item>No blocking questions: no STOP condition was hit.</item>
+  </risks-and-open-questions>
+</implementation-plan>

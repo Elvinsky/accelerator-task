@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<prompt role="writing-plans" task="Training Sessions Workspace">
+  <context>
+    <source>mikhnevich-accelerator-task/agentic-artifacts/requirements-checklist.xml (confirmed requirements; the single source of truth for scope)</source>
+    <source>frontend-accelerator-onboarding/TASK.md (delivery conditions: mock approach, existing stack, unrelated-code constraints)</source>
+    <source>Existing application code, package.json and project conventions (read-only, to align the plan with the current stack)</source>
+  </context>
+
+  <outcome>
+    A descriptive technological and architectural implementation plan that covers every item in the requirements checklist (goals, functional requirements, acceptance criteria) and respects its out-of-scope list. The plan must be detailed enough for a coder to implement without making further design decisions.
+  </outcome>
+
+  <plan-content>
+    <section name="folder-structure">Proposed folders and files, each with a one-line responsibility. Mark which files are new and which are modified.</section>
+    <section name="dependencies">Only dependencies that are truly required, each with a justification. Prefer the existing stack. If none are needed, say so explicitly.</section>
+    <section name="architecture">Module boundaries and how modules communicate: UI components, data-access layer (mock API), state and logic layer, and shared types or constants. Show the direction of dependencies.</section>
+    <section name="state-management">Where each piece of state lives and why: sessions list, load status (loading, error, empty, success), active status filter, form values, form errors, and the pending-create flag. State how derived data (the filtered list) is computed and how the pending flag blocks repeated submission.</section>
+    <section name="data-contracts">Session shape (title, status, start date/time only), the status values and the default status for new sessions, the mock API surface (list and create, with simulated latency and failure), and the date/time format and timezone decision for "future".</section>
+    <section name="ui-ux-decisions">Layout and component hierarchy, the create-form entry point, filter control, and the loading, error with retry, empty, validation and create-failure states. Decisions are intuitive, not strictly prescribed. Constraints: no animations, no bright or glossy colors, a neutral and usable look, readable spacing, clear labels, and visible validation messages tied to their fields. Use the existing design conventions if the project has them.</section>
+    <section name="validation-rules">Title: trimmed, 3 to 80 characters (boundaries included). Date/time: required and in the future. The exact message wording for each failure.</section>
+    <section name="implementation-steps">Ordered, step-by-step instructions. Each step lists the files touched, what to do, and the requirement or acceptance criterion it satisfies. Include a traceability table that maps every checklist item to a step.</section>
+    <section name="testing-and-verification">At least one automated test of the main flow that checks what the trainer sees (for example filtering or successful creation), the test file location and tooling, and the manual real-browser check procedure with what must be recorded. State what will be reported as not done or not checked.</section>
+    <section name="risks-and-open-questions">Anything ambiguous, with the assumption chosen. Items that block planning go to the STOP conditions.</section>
+  </plan-content>
+
+  <artifact>
+    <path>mikhnevich-accelerator-task/agentic-artifacts/implementation-plan.xml</path>
+    <note>One well-formed XML file, with the same style and conventions as requirements-checklist.xml. Use the sections listed in plan-content as elements, and keep each element concise and concrete.</note>
+  </artifact>
+
+  <constraints>
+    <constraint>Plan only. Do not write or edit production code, tests, configs or any existing file.</constraint>
+    <constraint>The only file you may create is the artifact above. Make no other file changes without an explicit request.</constraint>
+    <constraint>Do not add scope: no details view, search, pagination, multiple filters, extra session fields, sorting requirements, CI or deployment.</constraint>
+    <constraint>Do not change the confirmed requirements. Record disagreements under risks-and-open-questions instead.</constraint>
+    <constraint>Prefer the existing stack and the simplest solution that satisfies the checklist. Justify every new dependency.</constraint>
+    <constraint>Do not invent files, APIs or project facts. Verify the current code by reading it, and mark anything unverified as an assumption.</constraint>
+    <constraint>Do not start implementation, review or verification.</constraint>
+  </constraints>
+
+  <stop>
+    STOP when the plan is saved and complete, or when a step is unclear and cannot be resolved from the sources. In the second case, list the unclear points as questions and do not guess. Report the result and do not start another role or command.
+  </stop>
+</prompt>

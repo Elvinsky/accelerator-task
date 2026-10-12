@@ -1,0 +1,73 @@
+<prompt role="code-reviewer" mode="multi-agent-review" task="TASK-NNN">
+  <context>
+    <source>mikhnevich-accelerator-task/frontend-accelerator-onboarding/TASK.md (task definition: required user flow, behavior and mock boundary; source of truth for expected features)</source>
+    <source>mikhnevich-accelerator-task/agentic-artifacts/implementation-plan.xml (the plan the application was built from; review the code against it)</source>
+    <source>tasks/TASK-NNN/requirements.md (acceptance criteria, if present)</source>
+    <source>specs/ (confirmed living specs, if present)</source>
+    <source>rulesets/common, rulesets/framework, rulesets/project (reviewer sections, loaded in that order)</source>
+    <source>The selected Application Root: src/, tests, package.json scripts, tsconfig*.json, .oxlintrc.json, vite.config.ts, vitest.config.ts</source>
+  </context>
+
+  <skills>
+    <skill name="code-reviewer" use="primary">Follow .agents/skills/code-reviewer/SKILL.md for context resolution, ruleset loading, severity model and output.</skill>
+  </skills>
+
+  <scope>
+    <area>Application folder structure and module boundaries</area>
+    <area>Features: implemented behavior against requirements and plan, including loading, empty, error and recovery states</area>
+    <area>Code: correctness, types, error handling, accessibility, security, performance</area>
+    <area>Code style: naming, formatting, lint and TypeScript rules, consistency with neighboring code</area>
+    <area>Tests: coverage of essential behavior, quality, flakiness, missing edge cases</area>
+    <area>Code smells: duplication, dead code, oversized units, deep nesting, leaky abstractions, magic values</area>
+  </scope>
+
+  <outcome>
+    Review the whole application from six independent sides in parallel, collect one fix log per side, merge the logs into a single deduplicated, prioritized fix list, and return that list as XML.
+  </outcome>
+
+  <workflow>
+    <step>Read TASK.md and implementation-plan.xml first, then any requirements, specs and rulesets. Pass both files to the features, tests and structure sub-agents.</step>
+    <step>Map the Application Root once (tree, entry points, scripts) and share that map with every sub-agent.</step>
+    <step>Launch ONE reviewer sub-agent per lens, all in a single message so they run concurrently: structure, features, code, style, tests, smells. Each lens is independent and reads only its own area of concern.</step>
+    <step>Brief each sub-agent with: its lens and scope, the Application Root, the relevant ruleset sections, the severity model, the fix-log format below, and the rule that it is read-only. A sub-agent has no other context.</step>
+    <step>Each sub-agent returns a fix log: a list of findings, each with id, severity (blocker, major, minor, nit), file and line, evidence (quoted code or command output), the problem, and the concrete fix. No finding without evidence.</step>
+    <step>Wait for all six logs. If any sub-agent fails, times out or returns an unusable log, trigger the subagent-failed stop condition. Do not retry silently and do not merge partial results as complete.</step>
+    <step>Merge: drop duplicates (same file and root cause across lenses, keep the highest severity and list every source lens), resolve conflicts, discard findings that lack evidence or contradict the rulesets, and order by severity, then by file.</step>
+    <step>Spot-check each blocker and major finding against the source before including it. Do not accept a claim without evidence.</step>
+  </workflow>
+
+  <constraints>
+    <constraint>Read-only. Do not edit, create, delete or format any file. Do not install tooling, commit or push.</constraint>
+    <constraint>Existing checks (lint, typecheck, tests) may be run only through commands already defined in package.json. Report real exit results; never assume them.</constraint>
+    <constraint>Report only evidence-based findings tied to a file and line. No speculation, no style preferences that the rulesets do not state, no scope growth beyond the six lenses.</constraint>
+    <constraint>Every finding must have a concrete, minimal fix. Do not propose rewrites or new libraries unless a blocker requires it.</constraint>
+    <constraint>Sub-agents must not spawn further agents, edit files or start other roles.</constraint>
+    <constraint>Mark anything not reviewed or not verifiable as unverified. Never claim full coverage you did not achieve.</constraint>
+  </constraints>
+
+  <stop_conditions>
+    <condition id="review-ended">All six sub-agent logs are received, merged and spot-checked. Return the fix list and STOP.</condition>
+    <condition id="subagent-failed">Any sub-agent fails, errors, times out or returns no usable log. Report which lens failed and why, include the logs that did complete as partial and unmerged evidence, and STOP.</condition>
+    <rule>On any STOP: do not start another role, do not apply fixes, and state clearly whether the review was complete or partial.</rule>
+  </stop_conditions>
+
+  <output_format>
+    Return one XML document and nothing else:
+    <fix_list task="TASK-NNN" status="complete|partial">
+      <summary total="N" blocker="N" major="N" minor="N" nit="N"/>
+      <fix id="FIX-001" severity="blocker|major|minor|nit" lenses="structure,code">
+        <location file="src/..." line="N"/>
+        <problem>What is wrong, with the evidence.</problem>
+        <action>The minimal concrete change.</action>
+      </fix>
+      <checks_run>
+        <check command="npm test" result="exit 0"/>
+      </checks_run>
+      <unverified>What was not reviewed or could not be verified, or "none".</unverified>
+      <failure lens="..." reason="..."/> <!-- only when status="partial" -->
+    </fix_list>
+    Escape &amp;, &lt; and &gt; inside text. Order fixes by severity, then by file.
+  </output_format>
+
+  <stop>Return the fix list and STOP. Do not apply fixes or invoke coder, verify, docs-generator or any other role.</stop>
+</prompt>

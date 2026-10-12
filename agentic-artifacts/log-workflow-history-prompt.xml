@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<prompt name="log-workflow-history">
+  <context>
+    <target>mikhnevich-accelerator-task/frontend-accelerator-onboarding/workflow-log.md</target>
+    <source>The local conversation history of this session: the developer's prompts and your answers.</source>
+  </context>
+
+  <outcome>
+    Record the session's prompt history in the workflow log by following the template that is already in the log file.
+    Add one row to the "Role Decisions" table for each developer prompt, in chronological order.
+  </outcome>
+
+  <steps>
+    <step>Read the target file first and follow its existing template and any instructions written in it.</step>
+    <step>For each developer prompt, add one table row with these columns: Time, Role, Exact prompt used, Result reviewed, Developer decision, Next action.</step>
+    <step>Fill "Time" with the date and time of the prompt. Use the real current time (for example from `date`), and never invent one.</step>
+    <step>Fill "Role" with the role that was active for that prompt.</step>
+    <step>Fill "Exact prompt used" with the developer's prompt preserved word for word. For a long pasted prompt, give a faithful summary and say it is a summary.</step>
+    <step>Fill "Result reviewed" with a short description of the artifact or answer that came back. Never copy the full response.</step>
+    <step>Fill "Developer decision" with accept, clarify or correct, based on what the developer did next.</step>
+    <step>Fill "Next action" with the role or action the developer selected next. If none has been chosen yet, say so.</step>
+    <step>Add the rows by editing the existing table. Keep every existing row and every other section unchanged.</step>
+  </steps>
+
+  <constraints>
+    <constraint>Omit the prompt that requests the logging itself, and any other prompt the developer asks to omit. If only part of a prompt is to be omitted, say so in its row.</constraint>
+    <constraint>Do not fill the Task id, Developer, start and finish timestamps, runtime readiness, browser observation, completion or known limitations fields unless the developer asks for it.</constraint>
+    <constraint>Do not invent results, decisions or timestamps. If something is unknown, write that it is unknown.</constraint>
+    <constraint>Do not change any other file.</constraint>
+  </constraints>
+
+  <report>
+    Reply with a short summary of which rows were added.
+    State anything you summarised instead of copying, and any cell you filled in yourself, so the developer can correct it.
+  </report>
+</prompt>

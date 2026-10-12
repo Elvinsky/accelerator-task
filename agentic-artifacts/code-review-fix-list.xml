@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fix_list task="TASK-NNN" status="complete">
+  <summary total="26" blocker="0" major="1" minor="15" nit="10"/>
+
+  <fix id="FIX-001" severity="major" lenses="features">
+    <location file="src/features/sessions/api/mockSessionsApi.ts" line="41"/>
+    <problem>The one-shot failure for ?mock=list-error is not safe under StrictMode. Evidence: `if (failFirstList &amp;&amp; !listFailed) { listFailed = true; throw ... }`. src/main.tsx wraps the app in StrictMode, so in `npm run dev` the load effect in hooks/useSessions.ts:11-27 runs twice. The first call consumes the failure, and its result is discarded by the `cancelled` flag. The second call succeeds. The load-error state and "Try again" therefore cannot be reached in dev, and plan manual-check step 7 (list-error) cannot be performed there. Spot-checked against the source: confirmed. The hook itself is correct. Only the mock is affected.</problem>
+    <action>Make list-error fail every list call (for example `if (failListAlways) throw`). Keep the first-call-only behavior as a separate mode, for example ?mock=list-error-once. Alternatively, count calls and fail the first two. Document the choice in the mock.</action>
+  </fix>
+
+  <fix id="FIX-002" severity="minor" lenses="structure">
+    <location file="agentic-artifacts/implementation-plan.xml" line="21"/>
+    <problem>The plan's folder-structure lists a flat layout (src/features/sessions/types.ts and so on). The code uses components/, hooks/, model/, lib/ and api/ subfolders and a barrel index.ts that the plan never mentions. The dependency rules still hold, with no cycles and no UI import of the mock, but the plan and the code disagree on paths.</problem>
+    <action>Update the plan's folder-structure paths and add src/features/sessions/index.ts. Do not change the code.</action>
+  </fix>
+
+  <fix id="FIX-003" severity="minor" lenses="features">
+    <location file="frontend-accelerator-onboarding/workflow-log.md" line="60"/>
+    <problem>The Manual Browser Observation section still holds placeholders such as `&lt;what actually happened&gt;`. The coder row says "browser not re-checked". TASK.md requires the manual check to be recorded, or incomplete behavior to be reported honestly. The line number is approximate, and I did not re-read this file myself (agent-reported).</problem>
+    <action>Run list, filter and create once in a browser and fill in the section. Otherwise state explicitly that it was not performed. Also record that the list-error state could not be reached in dev (FIX-001).</action>
+  </fix>
+
+  <fix id="FIX-004" severity="minor" lenses="structure">
+    <location file="src/features/sessions/api/mockSessionsApi.ts" line="75"/>
+    <problem>Importing the feature barrel has a side effect. `export const mockSessionsApi = createMockSessionsApi(optionsFromUrl())` reads window.location.search at import time. The ?mock= switches (lines 66-73) are not described in the plan's folder-structure entry. Layering is otherwise intact.</problem>
+    <action>Add a one-line comment, or a plan note, that ?mock= is a manual-check aid read once at import. No code change is required.</action>
+  </fix>
+
+  <fix id="FIX-005" severity="minor" lenses="style">
+    <location file="src/features/sessions/components/CreateSessionForm.tsx" line="1"/>
+    <problem>Import order is inconsistent across files. CreateSessionForm.tsx goes `../model/constants.ts`, `../lib/format.ts`, `../model/types.ts`, `../lib/validation.ts`. SessionsWorkspace.tsx:1-8 and SessionList.tsx:1-3 are also unsorted. SessionFilter.tsx, mockSessionsApi.ts and the tests put external imports first, then local ones.</problem>
+    <action>Use one order everywhere: external packages, then `../` imports, then `./` imports.</action>
+  </fix>
+
+  <fix id="FIX-006" severity="minor" lenses="code,smells">
+    <location file="src/features/sessions/components/CreateSessionForm.tsx" line="62"/>
+    <problem>Three overlapping flags track one submit lifecycle: pending state, submittingRef and the local `succeeded`. The code is `if (!succeeded) setPending(false)` in finally, then `if (succeeded) onCreated()`. The form stays stuck on "Creating..." unless its parent unmounts it on success, which couples a self-contained form to its parent. This is not a bug today.</problem>
+    <action>Call onCreated() inside the try right after the await and return. Call setPending(false) unconditionally (React 19 has no unmounted-setState warning). Drop `succeeded`.</action>
+  </fix>
+
+  <fix id="FIX-007" severity="minor" lenses="code">
+    <location file="src/features/sessions/components/CreateSessionForm.tsx" line="67"/>
+    <problem>Focus is lost when the focused element is removed or disabled. `if (succeeded) onCreated()` unmounts the whole form. Cancel and Try again (SessionsWorkspace.tsx:29, where reload sets loading and unmounts the button) do the same. `disabled={pending}` is set on the focused submit button. Focus falls to body, and keyboard and screen-reader users lose their place.</problem>
+    <action>Focus the "New session" button after the form closes (use a ref in SessionsWorkspace). Move focus to the h1 or the list after a reload. Optionally add a visually hidden role="status" message such as "Session created".</action>
+  </fix>
+
+  <fix id="FIX-008" severity="minor" lenses="code">
+    <location file="src/features/sessions/components/CreateSessionForm.tsx" line="71"/>
+    <problem>Both fields are mandatory per validateSessionForm, but neither input has `required` or `aria-required`, and the labels carry no indicator. The form uses `noValidate`. Users only learn a field is required after a failed submit.</problem>
+    <action>Add aria-required="true" to both inputs (safe under noValidate). Add a visible "(required)" hint or a note in the form.</action>
+  </fix>
+
+  <fix id="FIX-009" severity="minor" lenses="structure,style">
+    <location file="src/features/sessions/components/SessionFilter.tsx" line="5"/>
+    <problem>`export type StatusFilter = 'all' | SessionStatus` lives in a component file and is imported by SessionsWorkspace.tsx:5. The plan puts types in types.ts and says component files export only components. LoadStatus (hooks/useSessions.ts:4) and SessionFormValues/SessionFormErrors (lib/validation.ts:3-11) are scattered the same way. SessionFormValues is exported but unused, because CreateSessionForm.tsx:20 types its state inline.</problem>
+    <action>Move StatusFilter, LoadStatus and the form types to model/types.ts. Use `useState&lt;SessionFormValues&gt;` in CreateSessionForm.</action>
+  </fix>
+
+  <fix id="FIX-010" severity="minor" lenses="code">
+    <location file="src/features/sessions/components/SessionsWorkspace.tsx" line="22"/>
+    <problem>`content = &lt;p role="status"&gt;{MESSAGES.loading}&lt;/p&gt;` is inserted already populated on first paint. Some screen readers do not announce a live region inserted with its content. This was not tested against assistive technology (unverified).</problem>
+    <action>Keep a persistent `&lt;div role="status" aria-live="polite"&gt;` in the workspace and render the loading text into it. Alternatively set aria-busy on the container.</action>
+  </fix>
+
+  <fix id="FIX-011" severity="minor" lenses="smells,style">
+    <location file="src/features/sessions/components/SessionsWorkspace.tsx" line="30"/>
+    <problem>User-facing strings are inline while the plan says "All message strings live in constants.ts". MESSAGES holds only the loading, error and validation texts. Inline literals: `Try again` (:30), `New session` (:45, and duplicated at CreateSessionForm.tsx:72), `Training sessions` (:62), `Title`, `Start date and time`, `Creating...`, `Create session`, `Cancel` (CreateSessionForm.tsx:74, 94, 120, 123), and `Status` and `All` (SessionFilter.tsx:16, 22). `'all'` is also a bare magic string (SessionFilter.tsx:22, SessionsWorkspace.tsx:16, 19).</problem>
+    <action>Add a LABELS object (or extend MESSAGES) and `export const FILTER_ALL = 'all'` in model/constants.ts, and reference them from the components. Tests may keep literals on purpose, since they assert visible text.</action>
+  </fix>
+
+  <fix id="FIX-012" severity="minor" lenses="tests">
+    <location file="src/features/sessions/components/SessionsWorkspace.test.tsx" line="1"/>
+    <problem>Validation wiring through the UI is untested. All UI tests submit valid values ('2099-01-01T10:00'). Removing the early `return` after the validation errors in CreateSessionForm.tsx (lines 44 or 48) would still pass every test. Future-date rejection and the 3/80 boundaries are exercised only through validateSessionForm directly in validation.test.ts.</problem>
+    <action>Add one test. Open the form and submit empty, then assert MESSAGES.titleRequired is shown and createSession was not called. Type a valid title, set a past date with fireEvent.change, submit, and assert MESSAGES.startsAtPast is shown and createSession still has 0 calls. Optionally assert toHaveFocus on the invalid field.</action>
+  </fix>
+
+  <fix id="FIX-013" severity="minor" lenses="code">
+    <location file="src/features/sessions/hooks/useSessions.ts" line="19"/>
+    <problem>The list-load rejection is dropped: `() =&gt; { if (cancelled) return; setStatus('error') }`. The reason is neither kept nor logged. The UI hint says "Check your connection" even for non-network failures. CreateSessionForm.tsx:60 has the same bare catch, which is acceptable there because the user sees a message.</problem>
+    <action>Capture the error, or at least call console.error(err) in the rejection handler. Do this only if diagnosability is wanted. User-facing behavior is correct.</action>
+  </fix>
+
+  <fix id="FIX-014" severity="minor" lenses="code">
+    <location file="src/features/sessions/lib/format.ts" line="7"/>
+    <problem>`startsAtFormat.format(new Date(iso))` throws RangeError on an invalid date. One malformed startsAt from a real API would unmount the React root, because main.tsx has no error boundary. The mock data is always valid, so this only matters for a real backend.</problem>
+    <action>Return a fallback such as 'Date unavailable' when `Number.isNaN(new Date(iso).getTime())`.</action>
+  </fix>
+
+  <fix id="FIX-015" severity="minor" lenses="style">
+    <location file="src/features/sessions/model/types.ts" line="1"/>
+    <problem>`export type SessionStatus = 'scheduled' | 'completed' | 'cancelled'` repeats the literals of `SESSION_STATUSES = [...] as const` in model/constants.ts:3. The two can drift apart.</problem>
+    <action>Add `satisfies readonly SessionStatus[]` to the array. Alternatively derive the type from the array, which reverses the types and constants import direction.</action>
+  </fix>
+
+  <fix id="FIX-016" severity="minor" lenses="code">
+    <location file="src/index.css" line="66"/>
+    <problem>`--border: #cbd2d9` (line 6) is used for the borders of input, select and button on a #ffffff surface. By hand estimate the contrast is about 1.5:1, below the 3:1 that WCAG 1.4.11 requires for control boundaries. This was not measured with a tool (unverified).</problem>
+    <action>Add a darker control border token (for example #7b8794 or darker) for input and select. Keep --border for decorative borders.</action>
+  </fix>
+
+  <fix id="FIX-017" severity="nit" lenses="style">
+    <location file="src/features/sessions/api/mockSessionsApi.ts" line="24"/>
+    <problem>Some lines are about 115 characters (mockSessionsApi.ts:21-25 and SessionsWorkspace.test.tsx:8-10, 76 and 91). The repo has no formatter config. Other files wrap at about 100 characters.</problem>
+    <action>Wrap these lines to about 100 characters.</action>
+  </fix>
+
+  <fix id="FIX-018" severity="nit" lenses="style,smells">
+    <location file="src/features/sessions/api/mockSessionsApi.ts" line="40"/>
+    <problem>The default latencies are anonymous inline numbers: `latencyMs ?? 600` (:40) and `latencyMs ?? 800` (:48). The URL mode strings and the `mock` param name are also inline (:66-73).</problem>
+    <action>Add named constants at the top of the file, for example LIST_LATENCY_MS = 600 and CREATE_LATENCY_MS = 800.</action>
+  </fix>
+
+  <fix id="FIX-019" severity="nit" lenses="features">
+    <location file="src/features/sessions/components/CreateSessionForm.tsx" line="41"/>
+    <problem>setSubmitError(null) runs only at the start of the next submit. After a create failure the alert stays visible while the user edits the fields. This matches the plan's wording and is harmless.</problem>
+    <action>Optional: clear submitError in the field onChange handlers.</action>
+  </fix>
+
+  <fix id="FIX-020" severity="nit" lenses="smells">
+    <location file="src/features/sessions/components/CreateSessionForm.tsx" line="42"/>
+    <problem>The focus-first-invalid logic is written twice, once for title and once for startsAt (lines 42-49). The two field blocks are also near-identical copies. The cost is low with two fields.</problem>
+    <action>Optional: collapse to `const first = errors.title ? titleRef : errors.startsAt ? startsAtRef : null; if (first) { first.current?.focus(); return }`. Do not extract a component now.</action>
+  </fix>
+
+  <fix id="FIX-021" severity="nit" lenses="style">
+    <location file="src/features/sessions/components/SessionsWorkspace.test.tsx" line="37"/>
+    <problem>The tests hardcode 'Loading sessions...' (:37) and 'Could not load sessions.' (:118), while validation.test.ts:2 imports MESSAGES. The two test files are inconsistent. Hardcoding can be deliberate, since it checks the real UI text.</problem>
+    <action>Pick one approach and use it in both files.</action>
+  </fix>
+
+  <fix id="FIX-022" severity="nit" lenses="tests">
+    <location file="src/features/sessions/components/SessionsWorkspace.test.tsx" line="57"/>
+    <problem>Some behaviors have no test. These are creating a session while a non-matching filter is active (the plan says the row stays hidden until All is chosen), the Cancel button, and the pending state resetting after a failure. The app runs under StrictMode, but the tests render without it, so the double effect and stale-response guard (useSessions.ts:11-27) are untested. Risk is low.</problem>
+    <action>Optional: in the create test, select "Completed" first and assert the new title is absent, then select "All" and assert it appears. Assert the Create button is enabled after the failure alert. Wrap one render in StrictMode and assert there are no duplicates.</action>
+  </fix>
+
+  <fix id="FIX-023" severity="nit" lenses="smells">
+    <location file="src/features/sessions/components/SessionsWorkspace.test.tsx" line="67"/>
+    <problem>`fireEvent.click(submit)` followed by `fireEvent.submit(submit.closest('form')!)` is a deliberate double-submit test with no comment. A reader may delete the "redundant" second call, and removing it would weaken the test.</problem>
+    <action>Add a one-line comment: "double submit must call the API once".</action>
+  </fix>
+
+  <fix id="FIX-024" severity="nit" lenses="tests">
+    <location file="src/features/sessions/components/SessionsWorkspace.test.tsx" line="78"/>
+    <problem>`expect(screen.queryByRole('form')).not.toBeInTheDocument()` is vacuous. A form without an accessible name has no `form` role in Testing Library, so the query returns null even while the form is mounted. Line 79 (`queryByLabelText('Title')`) is the real check.</problem>
+    <action>Delete line 78, or add aria-label to the form and query by that name.</action>
+  </fix>
+
+  <fix id="FIX-025" severity="nit" lenses="tests">
+    <location file="src/features/sessions/components/SessionsWorkspace.test.tsx" line="106"/>
+    <problem>`findByRole('heading', { name: 'Training sessions' })` is vacuous. The h1 is always rendered (SessionsWorkspace.tsx:62), so it does not prove the form closed after the retry succeeded.</problem>
+    <action>Replace it with `await waitFor(() =&gt; expect(screen.queryByLabelText('Title')).not.toBeInTheDocument())`.</action>
+  </fix>
+
+  <fix id="FIX-026" severity="nit" lenses="style">
+    <location file="src/features/sessions/hooks/useSessions.ts" line="11"/>
+    <problem>Comment density is inconsistent. CreateSessionForm.tsx:64 has the only explanatory comment in src/. The non-obvious cancelled-flag effect, which guards the StrictMode double run and stale responses, has none.</problem>
+    <action>Add a one-line comment on the `cancelled` flag.</action>
+  </fix>
+
+  <checks_run>
+    <check command="npm run lint" result="exit 0"/>
+    <check command="npm test" result="exit 0 (2 files, 8 tests passed)"/>
+    <check command="npm run build" result="completed successfully (tsc -b and vite build, 26 modules transformed). The exit code was not captured because of a shell piping issue, so this is a success judged from the output, not a recorded exit code."/>
+  </checks_run>
+
+  <unverified>
+    The Application Root has no tasks/ or specs/ folder, so there were no requirements.md or living specs to review against. rulesets/project is empty.
+    Runtime behavior was not exercised in a browser: rendering, datetime-local behavior, focus appearance and screen-reader announcements are unverified. Contrast figures are hand estimates.
+    The code lens did not read the plan, TASK.md or the ruleset files. The structure lens did not read the full component bodies. I spot-checked the one major (FIX-001) against the source and confirmed it. The minors and nits rest on lens evidence, plus my own reads of the mock, hook, main.tsx, format.ts, the form, the test excerpts and index.css. The workflow-log.md finding (FIX-003) and the line numbers on FIX-012 and FIX-022 are approximate and were not re-verified.
+    Read-only deviation: running `npm run build`, as a check defined in package.json, rewrote the existing dist/ output and node_modules/.tmp tsbuildinfo. No source, test or config file was edited. Dropped as "no fix required": a handler-naming nit (onCreated vs onCancel) and a note that the mock factory export is unused outside its file.
+  </unverified>
+</fix_list>
